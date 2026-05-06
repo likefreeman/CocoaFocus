@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import './App.css'
 import { createAudioEngine, type SoundType } from './audio'
+import { requestNotifyPermission, sendNotification, type NotifyMode } from './notify'
 
 type Mode = 'focus' | 'short' | 'long'
 
@@ -23,6 +24,12 @@ const SOUNDS: { id: SoundType; emoji: string; label: string }[] = [
   { id: 'cat',   emoji: '🐱', label: '猫咪打呼噜' },
 ]
 
+const TOAST_CONTENT: Record<Mode, { emoji: string; title: string; sub: string }> = {
+  focus: { emoji: '🥥', title: '专注完成！', sub: '休息一下，喝口水~' },
+  short: { emoji: '☀️', title: '短休息结束', sub: '准备好了吗？继续加油！' },
+  long:  { emoji: '🌿', title: '长休息结束', sub: '精力满满，全速前进！' },
+}
+
 const FRUITS = ['🥥', '🍑', '🍓', '🍒', '🌸', '🍊', '🍋']
 
 interface FruitItem {
@@ -32,19 +39,24 @@ interface FruitItem {
   falling: boolean
 }
 
+interface Toast {
+  id: number
+  mode: Mode
+}
+
 function formatTime(s: number) {
   const m = Math.floor(s / 60).toString().padStart(2, '0')
   const sec = (s % 60).toString().padStart(2, '0')
   return `${m}:${sec}`
 }
 
-// Smooth ring: use SVG with animated gradient glow
 const RING_R = 108
 const RING_CX = 120
 const RING_CY = 120
 const CIRCUMFERENCE = 2 * Math.PI * RING_R
 
-let fruitCounter = 0
+let fruitCounter = Date.now()
+let toastCounter = Date.now()
 
 export default function App() {
   const [mode, setMode] = useState<Mode>('focus')
@@ -58,10 +70,14 @@ export default function App() {
   const [modePressed, setModePressed] = useState<Mode | null>(null)
   const [soundPressed, setSoundPressed] = useState<SoundType | null>(null)
   const [completed, setCompleted] = useState(false)
+  const [toasts, setToasts] = useState<Toast[]>([])
+  const [notifyGranted, setNotifyGranted] = useState(false)
+  const [notifyAsked, setNotifyAsked] = useState(false)
 
   const audioRef = useRef(createAudioEngine())
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const prevSound = useRef<SoundType>('none')
+  const completedModeRef = useRef<Mode>('focus')
 
   // Timer tick
   useEffect(() => {
@@ -83,22 +99,41 @@ export default function App() {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
   }, [isRunning])
 
-  // On completion — drop a fruit
+  // On completion
   useEffect(() => {
     if (!completed) return
-    if (mode === 'focus') {
+    const finishedMode = completedModeRef.current
+
+    // 1. Play chime
+    audioRef.current.playChime()
+
+    // 2. Browser notification
+    sendNotification(finishedMode as NotifyMode)
+
+    // 3. In-app toast
+    const tid = ++toastCounter
+    setToasts(prev => [...prev, { id: tid, mode: finishedMode }])
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== tid)), 5000)
+
+    // 4. Drop fruit + count session
+    if (finishedMode === 'focus') {
       setSessions(s => s + 1)
       dropFruit()
     }
+
     setCompleted(false)
-  }, [completed, mode])
+  }, [completed])
+
+  // Track which mode was active when timer finishes
+  useEffect(() => {
+    completedModeRef.current = mode
+  }, [mode])
 
   const dropFruit = useCallback(() => {
     const id = ++fruitCounter
     const emoji = FRUITS[Math.floor(Math.random() * FRUITS.length)]
     const x = 15 + Math.random() * 70
     setFruits(prev => [...prev, { id, emoji, x, falling: true }])
-    // After animation ends, mark as settled
     setTimeout(() => {
       setFruits(prev => prev.map(f => f.id === id ? { ...f, falling: false } : f))
     }, 1400)
@@ -118,7 +153,6 @@ export default function App() {
     }
   }, [sound, isRunning, volume])
 
-  // Volume sync
   useEffect(() => {
     audioRef.current.setVolume(volume)
   }, [volume])
@@ -131,12 +165,19 @@ export default function App() {
     setIsRunning(false)
     audioRef.current.stop()
     prevSound.current = 'none'
-    if (sound !== 'none') prevSound.current = 'none'
   }
 
-  const handleToggle = () => {
+  const handleToggle = async () => {
     setBtnScale(true)
     setTimeout(() => setBtnScale(false), 300)
+
+    // Ask for notification permission on first play
+    if (!notifyAsked) {
+      setNotifyAsked(true)
+      const granted = await requestNotifyPermission()
+      setNotifyGranted(granted)
+    }
+
     if (isRunning) {
       setIsRunning(false)
       audioRef.current.stop()
@@ -162,6 +203,8 @@ export default function App() {
     }
   }
 
+  const dismissToast = (id: number) => setToasts(prev => prev.filter(t => t.id !== id))
+
   const progress = 1 - timeLeft / DURATIONS[mode]
   const dashOffset = CIRCUMFERENCE * (1 - progress)
 
@@ -180,6 +223,29 @@ export default function App() {
         ))}
       </div>
 
+      {/* Toast stack */}
+      <div className="toast-stack" role="status" aria-live="polite">
+        {toasts.map((t, i) => {
+          const c = TOAST_CONTENT[t.mode]
+          return (
+            <div
+              key={t.id}
+              className="toast"
+              style={{ '--i': i } as React.CSSProperties}
+              onClick={() => dismissToast(t.id)}
+            >
+              <span className="toast-emoji">{c.emoji}</span>
+              <div className="toast-body">
+                <div className="toast-title">{c.title}</div>
+                <div className="toast-sub">{c.sub}</div>
+              </div>
+              <button className="toast-close" onClick={e => { e.stopPropagation(); dismissToast(t.id) }}>×</button>
+              <div className="toast-progress" />
+            </div>
+          )
+        })}
+      </div>
+
       {/* Header */}
       <header className="header">
         <div className="logo">
@@ -189,10 +255,16 @@ export default function App() {
         <div className="session-info">
           <div className="session-dots">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className={`dot ${i < sessions % 4 ? 'on' : ''} ${i < sessions % 4 && sessions % 4 === i + 1 ? 'new' : ''}`} />
+              <div
+                key={i}
+                className={`dot ${i < sessions % 4 ? 'on' : ''}`}
+              />
             ))}
           </div>
           <span className="session-text">{sessions} 次专注</span>
+          {notifyGranted && (
+            <span className="notify-badge" title="通知已开启">🔔</span>
+          )}
         </div>
       </header>
 
@@ -225,51 +297,29 @@ export default function App() {
                   <feComposite in="SourceGraphic" in2="blur" operator="over" />
                 </filter>
               </defs>
-              {/* Track */}
+              <circle cx={RING_CX} cy={RING_CY} r={RING_R} fill="none" stroke="#EDE4D8" strokeWidth="10" />
               <circle
                 cx={RING_CX} cy={RING_CY} r={RING_R}
-                fill="none"
-                stroke="#EDE4D8"
-                strokeWidth="10"
-              />
-              {/* Glow layer */}
-              <circle
-                cx={RING_CX} cy={RING_CY} r={RING_R}
-                fill="none"
-                stroke="url(#ringGrad)"
-                strokeWidth="14"
-                strokeLinecap="round"
-                strokeDasharray={CIRCUMFERENCE}
-                strokeDashoffset={dashOffset}
+                fill="none" stroke="url(#ringGrad)" strokeWidth="14" strokeLinecap="round"
+                strokeDasharray={CIRCUMFERENCE} strokeDashoffset={dashOffset}
                 transform={`rotate(-90 ${RING_CX} ${RING_CY})`}
-                filter="url(#glow)"
-                opacity="0.5"
+                filter="url(#glow)" opacity="0.5"
               />
-              {/* Main ring */}
               <circle
                 cx={RING_CX} cy={RING_CY} r={RING_R}
-                fill="none"
-                stroke="url(#ringGrad)"
-                strokeWidth="10"
-                strokeLinecap="round"
-                strokeDasharray={CIRCUMFERENCE}
-                strokeDashoffset={dashOffset}
+                fill="none" stroke="url(#ringGrad)" strokeWidth="10" strokeLinecap="round"
+                strokeDasharray={CIRCUMFERENCE} strokeDashoffset={dashOffset}
                 transform={`rotate(-90 ${RING_CX} ${RING_CY})`}
               />
-              {/* Shimmer dot at tip */}
               {progress > 0.01 && (
                 <circle
                   cx={RING_CX + RING_R * Math.cos(-Math.PI / 2 + 2 * Math.PI * progress)}
                   cy={RING_CY + RING_R * Math.sin(-Math.PI / 2 + 2 * Math.PI * progress)}
-                  r="7"
-                  fill="white"
-                  opacity="0.9"
-                  filter="url(#glow)"
+                  r="7" fill="white" opacity="0.9" filter="url(#glow)"
                 />
               )}
             </svg>
 
-            {/* Timer text */}
             <div className="ring-inner">
               <div className="time-display">{formatTime(timeLeft)}</div>
               <div className="time-mode">{MODE_LABELS[mode]}</div>
@@ -302,7 +352,6 @@ export default function App() {
               )}
             </button>
 
-            {/* Demo button */}
             <button className="ctrl-btn sm" onClick={dropFruit} title="收集果实">
               <span style={{ fontSize: 18 }}>🥥</span>
             </button>
@@ -331,7 +380,6 @@ export default function App() {
             ))}
           </div>
 
-          {/* Volume */}
           {sound !== 'none' && (
             <div className="volume-row">
               <span className="vol-icon">🔈</span>

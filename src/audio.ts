@@ -4,6 +4,7 @@ export interface AudioEngine {
   setSound(type: SoundType, volume: number): void;
   setVolume(volume: number): void;
   stop(): void;
+  playChime(): void;
 }
 
 function createPinkNoise(ctx: AudioContext, bufferSize: number): AudioBufferSourceNode {
@@ -172,11 +173,47 @@ function createCatPurr(ctx: AudioContext, masterGain: GainNode): () => void {
   };
 }
 
+// Healing singing-bowl chime: 3 layered partials with exponential decay
+function playChimeOnContext(ctx: AudioContext): void {
+  const now = ctx.currentTime;
+  const out = ctx.createGain();
+  out.gain.value = 0.55;
+  out.connect(ctx.destination);
+
+  // Partials: frequencies, amplitudes, decay times
+  const partials: [number, number, number][] = [
+    [528,  0.8, 2.4],   // root (healing "Mi" tone)
+    [1056, 0.4, 1.6],   // octave
+    [1848, 0.2, 1.0],   // major 7th overtone
+    [2376, 0.1, 0.6],   // sparkle
+  ];
+
+  partials.forEach(([freq, amp, decay]) => {
+    const osc = ctx.createOscillator();
+    const g   = ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+
+    // Attack + exponential release
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(amp, now + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + decay);
+
+    osc.connect(g);
+    g.connect(out);
+    osc.start(now);
+    osc.stop(now + decay + 0.05);
+  });
+
+  // Clean up gain node after longest decay
+  setTimeout(() => { try { out.disconnect(); } catch {} }, 2800);
+}
+
 export function createAudioEngine(): AudioEngine {
   let ctx: AudioContext | null = null;
   let masterGain: GainNode | null = null;
   let currentCleanup: (() => void) | null = null;
-  let currentType: SoundType = 'none';
 
   function ensureContext() {
     if (!ctx || ctx.state === 'closed') {
@@ -191,7 +228,6 @@ export function createAudioEngine(): AudioEngine {
   return {
     setSound(type: SoundType, volume: number) {
       if (currentCleanup) { currentCleanup(); currentCleanup = null; }
-      currentType = type;
       if (type === 'none') return;
 
       const { ctx: c, masterGain: mg } = ensureContext();
@@ -206,7 +242,10 @@ export function createAudioEngine(): AudioEngine {
     },
     stop() {
       if (currentCleanup) { currentCleanup(); currentCleanup = null; }
-      currentType = 'none';
-    }
+    },
+    playChime() {
+      const { ctx: c } = ensureContext();
+      playChimeOnContext(c);
+    },
   };
 }

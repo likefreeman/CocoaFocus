@@ -531,6 +531,119 @@
   border-radius: inherit;
 }
 
+/* ─── Toast stack ────────────────────────────────────────── */
+.toast-stack {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+  width: min(380px, calc(100vw - 32px));
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px 14px 14px;
+  background: rgba(255, 253, 250, 0.92);
+  border-radius: 20px;
+  border: 1px solid rgba(232, 165, 152, 0.25);
+  box-shadow:
+    0 12px 40px rgba(160, 140, 120, 0.22),
+    0 4px 16px rgba(160, 140, 120, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  pointer-events: all;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  animation: toastIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes toastIn {
+  0%   { opacity: 0; transform: translateY(-20px) scale(0.92); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.toast-emoji {
+  font-size: 28px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.toast-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.2px;
+  line-height: 1.3;
+}
+
+.toast-sub {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text2);
+  margin-top: 2px;
+}
+
+.toast-close {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(160, 140, 120, 0.12);
+  color: var(--text3);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.toast-close:hover {
+  background: rgba(232, 165, 152, 0.25);
+  color: var(--red2);
+}
+
+/* Animated timer bar at bottom of toast */
+.toast-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--red), var(--warm));
+  border-radius: 0 0 20px 20px;
+  animation: toastTimer 5s linear forwards;
+  transform-origin: left;
+}
+
+@keyframes toastTimer {
+  0%   { width: 100%; opacity: 0.7; }
+  100% { width: 0%;   opacity: 0.4; }
+}
+
+/* Notify badge */
+.notify-badge {
+  font-size: 13px;
+  line-height: 1;
+  margin-left: 2px;
+  opacity: 0.7;
+}
+
 /* ─── Footer ─────────────────────────────────────────────── */
 .footer {
   margin-top: 24px;
