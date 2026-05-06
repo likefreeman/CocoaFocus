@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import './App.css'
+import { createAudioEngine, type SoundType } from './audio'
 
 type Mode = 'focus' | 'short' | 'long'
-type NoiseType = 'none' | 'rain' | 'cafe' | 'forest' | 'white'
 
 const DURATIONS: Record<Mode, number> = {
   focus: 25 * 60,
@@ -11,180 +11,59 @@ const DURATIONS: Record<Mode, number> = {
 }
 
 const MODE_LABELS: Record<Mode, string> = {
-  focus: 'Focus',
-  short: 'Short Break',
-  long: 'Long Break',
+  focus: '专注',
+  short: '短休息',
+  long: '长休息',
 }
 
-const NOISE_LABELS: Record<NoiseType, string> = {
-  none: 'Silence',
-  rain: 'Rain',
-  cafe: 'Café',
-  forest: 'Forest',
-  white: 'White Noise',
+const SOUNDS: { id: SoundType; emoji: string; label: string }[] = [
+  { id: 'none',  emoji: '🔇', label: '静音' },
+  { id: 'rain',  emoji: '🌧️', label: '林间落雨' },
+  { id: 'fire',  emoji: '🔥', label: '炉火微醺' },
+  { id: 'cat',   emoji: '🐱', label: '猫咪打呼噜' },
+]
+
+const FRUITS = ['🥥', '🍑', '🍓', '🍒', '🌸', '🍊', '🍋']
+
+interface FruitItem {
+  id: number
+  emoji: string
+  x: number
+  falling: boolean
 }
 
-function generateNoise(ctx: AudioContext, type: NoiseType): AudioNode | null {
-  if (type === 'none') return null
-
-  if (type === 'white') {
-    const bufferSize = ctx.sampleRate * 2
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
-    const data = buffer.getChannelData(0)
-    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1
-    const source = ctx.createBufferSource()
-    source.buffer = buffer
-    source.loop = true
-    const gain = ctx.createGain()
-    gain.gain.value = 0.05
-    source.connect(gain)
-    source.start()
-    return gain
-  }
-
-  if (type === 'rain') {
-    const bufferSize = ctx.sampleRate * 3
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
-    const data = buffer.getChannelData(0)
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = (Math.random() * 2 - 1) * (Math.random() < 0.002 ? 0.8 : 0.1)
-    }
-    const source = ctx.createBufferSource()
-    source.buffer = buffer
-    source.loop = true
-    const filter = ctx.createBiquadFilter()
-    filter.type = 'lowpass'
-    filter.frequency.value = 1200
-    const gain = ctx.createGain()
-    gain.gain.value = 0.3
-    source.connect(filter)
-    filter.connect(gain)
-    source.start()
-    return gain
-  }
-
-  if (type === 'cafe') {
-    const bufferSize = ctx.sampleRate * 4
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
-    const data = buffer.getChannelData(0)
-    for (let i = 0; i < bufferSize; i++) {
-      const t = i / ctx.sampleRate
-      data[i] = (Math.random() * 2 - 1) * 0.05 +
-        Math.sin(2 * Math.PI * 220 * t) * 0.005 +
-        Math.sin(2 * Math.PI * 330 * t) * 0.003
-    }
-    const source = ctx.createBufferSource()
-    source.buffer = buffer
-    source.loop = true
-    const filter = ctx.createBiquadFilter()
-    filter.type = 'bandpass'
-    filter.frequency.value = 800
-    filter.Q.value = 0.5
-    const gain = ctx.createGain()
-    gain.gain.value = 0.25
-    source.connect(filter)
-    filter.connect(gain)
-    source.start()
-    return gain
-  }
-
-  if (type === 'forest') {
-    const bufferSize = ctx.sampleRate * 3
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
-    const data = buffer.getChannelData(0)
-    for (let i = 0; i < bufferSize; i++) {
-      const t = i / ctx.sampleRate
-      data[i] = (Math.random() * 2 - 1) * 0.06 +
-        Math.sin(2 * Math.PI * 440 * t) * 0.002 * Math.random() +
-        Math.sin(2 * Math.PI * 880 * t) * 0.001 * Math.random()
-    }
-    const source = ctx.createBufferSource()
-    source.buffer = buffer
-    source.loop = true
-    const filter = ctx.createBiquadFilter()
-    filter.type = 'highpass'
-    filter.frequency.value = 600
-    const gain = ctx.createGain()
-    gain.gain.value = 0.2
-    source.connect(filter)
-    filter.connect(gain)
-    source.start()
-    return gain
-  }
-
-  return null
+function formatTime(s: number) {
+  const m = Math.floor(s / 60).toString().padStart(2, '0')
+  const sec = (s % 60).toString().padStart(2, '0')
+  return `${m}:${sec}`
 }
 
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60).toString().padStart(2, '0')
-  const s = (seconds % 60).toString().padStart(2, '0')
-  return `${m}:${s}`
-}
+// Smooth ring: use SVG with animated gradient glow
+const RING_R = 108
+const RING_CX = 120
+const RING_CY = 120
+const CIRCUMFERENCE = 2 * Math.PI * RING_R
 
-function PawIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-      <circle cx="6" cy="8" r="2"/>
-      <circle cx="10" cy="5.5" r="2"/>
-      <circle cx="14" cy="5.5" r="2"/>
-      <circle cx="18" cy="8" r="2"/>
-      <path d="M12 10c-3 0-6 2-6.5 5.5C5 18.5 7 21 12 21s7-2.5 6.5-5.5C18 12 15 10 12 10z"/>
-    </svg>
-  )
-}
+let fruitCounter = 0
 
 export default function App() {
   const [mode, setMode] = useState<Mode>('focus')
   const [timeLeft, setTimeLeft] = useState(DURATIONS.focus)
   const [isRunning, setIsRunning] = useState(false)
+  const [sound, setSound] = useState<SoundType>('none')
+  const [volume, setVolume] = useState(0.6)
+  const [fruits, setFruits] = useState<FruitItem[]>([])
   const [sessions, setSessions] = useState(0)
-  const [noise, setNoise] = useState<NoiseType>('none')
-  const [volume, setVolume] = useState(0.5)
-  const [buttonPressed, setButtonPressed] = useState(false)
+  const [btnScale, setBtnScale] = useState(false)
+  const [modePressed, setModePressed] = useState<Mode | null>(null)
+  const [soundPressed, setSoundPressed] = useState<SoundType | null>(null)
+  const [completed, setCompleted] = useState(false)
 
-  const audioCtxRef = useRef<AudioContext | null>(null)
-  const noiseNodeRef = useRef<AudioNode | null>(null)
-  const masterGainRef = useRef<GainNode | null>(null)
+  const audioRef = useRef(createAudioEngine())
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const prevSound = useRef<SoundType>('none')
 
-  const stopNoise = useCallback(() => {
-    if (noiseNodeRef.current) {
-      try {
-        (noiseNodeRef.current as AudioBufferSourceNode).disconnect?.()
-      } catch {}
-      noiseNodeRef.current = null
-    }
-  }, [])
-
-  const startNoise = useCallback((type: NoiseType, vol: number) => {
-    stopNoise()
-    if (type === 'none') return
-
-    if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
-      audioCtxRef.current = new AudioContext()
-    }
-    const ctx = audioCtxRef.current
-
-    if (!masterGainRef.current || masterGainRef.current.context !== ctx) {
-      masterGainRef.current = ctx.createGain()
-      masterGainRef.current.connect(ctx.destination)
-    }
-
-    masterGainRef.current.gain.value = vol
-
-    const node = generateNoise(ctx, type)
-    if (node) {
-      node.connect(masterGainRef.current)
-      noiseNodeRef.current = node
-    }
-  }, [stopNoise])
-
-  useEffect(() => {
-    if (masterGainRef.current) {
-      masterGainRef.current.gain.value = volume
-    }
-  }, [volume])
-
+  // Timer tick
   useEffect(() => {
     if (isRunning) {
       intervalRef.current = setInterval(() => {
@@ -192,7 +71,7 @@ export default function App() {
           if (t <= 1) {
             clearInterval(intervalRef.current!)
             setIsRunning(false)
-            if (mode === 'focus') setSessions(s => s + 1)
+            setCompleted(true)
             return 0
           }
           return t - 1
@@ -202,63 +81,128 @@ export default function App() {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
-  }, [isRunning, mode])
+  }, [isRunning])
+
+  // On completion — drop a fruit
+  useEffect(() => {
+    if (!completed) return
+    if (mode === 'focus') {
+      setSessions(s => s + 1)
+      dropFruit()
+    }
+    setCompleted(false)
+  }, [completed, mode])
+
+  const dropFruit = useCallback(() => {
+    const id = ++fruitCounter
+    const emoji = FRUITS[Math.floor(Math.random() * FRUITS.length)]
+    const x = 15 + Math.random() * 70
+    setFruits(prev => [...prev, { id, emoji, x, falling: true }])
+    // After animation ends, mark as settled
+    setTimeout(() => {
+      setFruits(prev => prev.map(f => f.id === id ? { ...f, falling: false } : f))
+    }, 1400)
+  }, [])
+
+  // Sync sound
+  useEffect(() => {
+    const engine = audioRef.current
+    if (sound !== prevSound.current) {
+      if (sound === 'none' || !isRunning) {
+        engine.stop()
+        if (sound !== 'none' && isRunning) engine.setSound(sound, volume)
+      } else {
+        engine.setSound(sound, volume)
+      }
+      prevSound.current = sound
+    }
+  }, [sound, isRunning, volume])
+
+  // Volume sync
+  useEffect(() => {
+    audioRef.current.setVolume(volume)
+  }, [volume])
 
   const handleModeChange = (m: Mode) => {
+    setModePressed(m)
+    setTimeout(() => setModePressed(null), 200)
     setMode(m)
     setTimeLeft(DURATIONS[m])
     setIsRunning(false)
+    audioRef.current.stop()
+    prevSound.current = 'none'
+    if (sound !== 'none') prevSound.current = 'none'
   }
 
   const handleToggle = () => {
-    if (!isRunning && noise !== 'none') {
-      startNoise(noise, volume)
-    } else if (isRunning && noise !== 'none') {
-      stopNoise()
+    setBtnScale(true)
+    setTimeout(() => setBtnScale(false), 300)
+    if (isRunning) {
+      setIsRunning(false)
+      audioRef.current.stop()
+    } else {
+      setIsRunning(true)
+      if (sound !== 'none') audioRef.current.setSound(sound, volume)
     }
-    setIsRunning(r => !r)
-    setButtonPressed(true)
-    setTimeout(() => setButtonPressed(false), 150)
   }
 
   const handleReset = () => {
     setIsRunning(false)
     setTimeLeft(DURATIONS[mode])
-    stopNoise()
+    audioRef.current.stop()
   }
 
-  const handleNoiseChange = (n: NoiseType) => {
-    setNoise(n)
+  const handleSoundChange = (s: SoundType) => {
+    setSoundPressed(s)
+    setTimeout(() => setSoundPressed(null), 180)
+    setSound(s)
     if (isRunning) {
-      if (n === 'none') stopNoise()
-      else startNoise(n, volume)
+      if (s === 'none') audioRef.current.stop()
+      else audioRef.current.setSound(s, volume)
     }
   }
 
   const progress = 1 - timeLeft / DURATIONS[mode]
-  const circumference = 2 * Math.PI * 110
+  const dashOffset = CIRCUMFERENCE * (1 - progress)
 
   return (
-    <div className="app-shell">
-      <header className="app-header">
+    <div className="shell">
+      {/* Falling fruits */}
+      <div className="fruit-stage" aria-hidden>
+        {fruits.map(f => (
+          <div
+            key={f.id}
+            className={`fruit-drop ${f.falling ? 'falling' : 'settled'}`}
+            style={{ left: `${f.x}%` }}
+          >
+            {f.emoji}
+          </div>
+        ))}
+      </div>
+
+      {/* Header */}
+      <header className="header">
         <div className="logo">
-          <PawIcon />
-          <span>CocoaFocus</span>
+          <span className="logo-icon">🥥</span>
+          <span className="logo-text">CocoaFocus</span>
         </div>
-        <div className="session-count">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <span key={i} className={`session-dot ${i < sessions % 4 ? 'filled' : ''}`} />
-          ))}
-          <span className="session-label">{sessions} sessions</span>
+        <div className="session-info">
+          <div className="session-dots">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className={`dot ${i < sessions % 4 ? 'on' : ''} ${i < sessions % 4 && sessions % 4 === i + 1 ? 'new' : ''}`} />
+            ))}
+          </div>
+          <span className="session-text">{sessions} 次专注</span>
         </div>
       </header>
 
-      <main className="app-main">
-        <div className="mode-tabs">
+      <main className="main">
+        {/* Mode selector */}
+        <div className="mode-bar">
           {(['focus', 'short', 'long'] as Mode[]).map(m => (
             <button
               key={m}
-              className={`mode-tab ${mode === m ? 'active' : ''}`}
+              className={`mode-btn ${mode === m ? 'active' : ''} ${modePressed === m ? 'pressed' : ''}`}
               onClick={() => handleModeChange(m)}
             >
               {MODE_LABELS[m]}
@@ -266,115 +210,162 @@ export default function App() {
           ))}
         </div>
 
+        {/* Timer card */}
         <div className="timer-card">
-          <div className="timer-ring-container">
-            <svg className="timer-ring" viewBox="0 0 240 240">
+          <div className="ring-wrap">
+            <svg className="ring-svg" viewBox="0 0 240 240">
+              <defs>
+                <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#E8A598" />
+                  <stop offset="50%" stopColor="#D4957A" />
+                  <stop offset="100%" stopColor="#C9A882" />
+                </linearGradient>
+                <filter id="glow">
+                  <feGaussianBlur stdDeviation="3" result="blur" />
+                  <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                </filter>
+              </defs>
+              {/* Track */}
               <circle
-                cx="120" cy="120" r="110"
+                cx={RING_CX} cy={RING_CY} r={RING_R}
                 fill="none"
-                stroke="rgba(255,255,255,0.06)"
-                strokeWidth="8"
+                stroke="#EDE4D8"
+                strokeWidth="10"
               />
+              {/* Glow layer */}
               <circle
-                cx="120" cy="120" r="110"
+                cx={RING_CX} cy={RING_CY} r={RING_R}
                 fill="none"
-                stroke="var(--cocoa-gold)"
-                strokeWidth="8"
+                stroke="url(#ringGrad)"
+                strokeWidth="14"
                 strokeLinecap="round"
-                strokeDasharray={circumference}
-                strokeDashoffset={circumference * (1 - progress)}
-                transform="rotate(-90 120 120)"
-                style={{ transition: 'stroke-dashoffset 0.5s ease' }}
+                strokeDasharray={CIRCUMFERENCE}
+                strokeDashoffset={dashOffset}
+                transform={`rotate(-90 ${RING_CX} ${RING_CY})`}
+                filter="url(#glow)"
+                opacity="0.5"
               />
+              {/* Main ring */}
+              <circle
+                cx={RING_CX} cy={RING_CY} r={RING_R}
+                fill="none"
+                stroke="url(#ringGrad)"
+                strokeWidth="10"
+                strokeLinecap="round"
+                strokeDasharray={CIRCUMFERENCE}
+                strokeDashoffset={dashOffset}
+                transform={`rotate(-90 ${RING_CX} ${RING_CY})`}
+              />
+              {/* Shimmer dot at tip */}
+              {progress > 0.01 && (
+                <circle
+                  cx={RING_CX + RING_R * Math.cos(-Math.PI / 2 + 2 * Math.PI * progress)}
+                  cy={RING_CY + RING_R * Math.sin(-Math.PI / 2 + 2 * Math.PI * progress)}
+                  r="7"
+                  fill="white"
+                  opacity="0.9"
+                  filter="url(#glow)"
+                />
+              )}
             </svg>
-            <div className="timer-display">
-              <div className="timer-time">{formatTime(timeLeft)}</div>
-              <div className="timer-mode-label">{MODE_LABELS[mode]}</div>
+
+            {/* Timer text */}
+            <div className="ring-inner">
+              <div className="time-display">{formatTime(timeLeft)}</div>
+              <div className="time-mode">{MODE_LABELS[mode]}</div>
+              {isRunning && <div className="pulse-ring" />}
             </div>
           </div>
 
-          <div className="timer-controls">
-            <button className="control-btn reset-btn" onClick={handleReset} title="Reset">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="20" height="20">
+          {/* Controls */}
+          <div className="controls">
+            <button className="ctrl-btn sm" onClick={handleReset} title="重置">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18">
                 <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
                 <path d="M3 3v5h5"/>
               </svg>
             </button>
 
             <button
-              className={`control-btn start-btn ${isRunning ? 'running' : ''} ${buttonPressed ? 'pressed' : ''}`}
+              className={`ctrl-btn lg ${isRunning ? 'pause' : 'play'} ${btnScale ? 'bounce' : ''}`}
               onClick={handleToggle}
             >
               {isRunning ? (
-                <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
-                  <rect x="6" y="4" width="4" height="16" rx="1"/>
-                  <rect x="14" y="4" width="4" height="16" rx="1"/>
+                <svg viewBox="0 0 24 24" fill="currentColor" width="30" height="30">
+                  <rect x="6" y="4" width="4" height="16" rx="2"/>
+                  <rect x="14" y="4" width="4" height="16" rx="2"/>
                 </svg>
               ) : (
-                <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="30" height="30">
                   <path d="M8 5.14v14l11-7-11-7z"/>
                 </svg>
               )}
             </button>
 
-            <button className="control-btn skip-btn" onClick={() => handleReset()} title="Skip">
-              <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                <path d="M6 18L14.5 12 6 6v12zM16 6v12h2V6h-2z"/>
-              </svg>
+            {/* Demo button */}
+            <button className="ctrl-btn sm" onClick={dropFruit} title="收集果实">
+              <span style={{ fontSize: 18 }}>🥥</span>
             </button>
           </div>
         </div>
 
-        <div className="noise-panel">
-          <div className="noise-header">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
-              <path d="M9 18V5l12-2v13"/>
-              <circle cx="6" cy="18" r="3"/>
-              <circle cx="18" cy="16" r="3"/>
+        {/* Sound panel */}
+        <div className="sound-card">
+          <div className="sound-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15">
+              <path d="M3 18v-6a9 9 0 0 1 18 0v6"/>
+              <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/>
             </svg>
-            <span>Ambient Sound</span>
+            <span>治愈音景</span>
           </div>
-          <div className="noise-options">
-            {(['none', 'rain', 'cafe', 'forest', 'white'] as NoiseType[]).map(n => (
+          <div className="sound-grid">
+            {SOUNDS.map(s => (
               <button
-                key={n}
-                className={`noise-btn ${noise === n ? 'active' : ''}`}
-                onClick={() => handleNoiseChange(n)}
+                key={s.id}
+                className={`sound-btn ${sound === s.id ? 'active' : ''} ${soundPressed === s.id ? 'pressed' : ''}`}
+                onClick={() => handleSoundChange(s.id)}
               >
-                {n === 'none' && '🔇'}
-                {n === 'rain' && '🌧️'}
-                {n === 'cafe' && '☕'}
-                {n === 'forest' && '🌿'}
-                {n === 'white' && '〰️'}
-                <span>{NOISE_LABELS[n]}</span>
+                <span className="sound-emoji">{s.emoji}</span>
+                <span className="sound-label">{s.label}</span>
               </button>
             ))}
           </div>
-          {noise !== 'none' && (
-            <div className="volume-control">
-              <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
-                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
-              </svg>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={volume}
-                onChange={e => setVolume(parseFloat(e.target.value))}
-                className="volume-slider"
-              />
-              <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
-                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM18.5 12c0-2.77-1.5-5.15-3.75-6.45v12.87C16.99 17.14 18.5 14.77 18.5 12z"/>
-              </svg>
+
+          {/* Volume */}
+          {sound !== 'none' && (
+            <div className="volume-row">
+              <span className="vol-icon">🔈</span>
+              <div className="slider-track">
+                <input
+                  type="range" min="0" max="1" step="0.01"
+                  value={volume}
+                  onChange={e => setVolume(+e.target.value)}
+                  className="vol-slider"
+                />
+                <div className="slider-fill" style={{ width: `${volume * 100}%` }} />
+              </div>
+              <span className="vol-icon">🔊</span>
             </div>
           )}
         </div>
+
+        {/* Fruit jar */}
+        {fruits.length > 0 && (
+          <div className="jar-area">
+            <div className="jar-title">收集罐 · {fruits.filter(f => !f.falling).length} 个</div>
+            <div className="jar">
+              <div className="jar-inner">
+                {fruits.filter(f => !f.falling).map(f => (
+                  <span key={f.id} className="jar-fruit">{f.emoji}</span>
+                ))}
+              </div>
+              <div className="jar-glass" />
+            </div>
+          </div>
+        )}
       </main>
 
-      <footer className="app-footer">
-        <span>Made with warmth for focused minds</span>
-      </footer>
+      <footer className="footer">用专注酿造每一刻的温柔</footer>
     </div>
   )
 }

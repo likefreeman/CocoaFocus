@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800;900&display=swap');
 
 *, *::before, *::after {
   box-sizing: border-box;
@@ -7,32 +7,39 @@
 }
 
 :root {
-  --cocoa-bg: #2C1A0E;
-  --cocoa-surface: #3D2314;
-  --cocoa-warm: #7B4A2D;
-  --cocoa-accent: #D4874E;
-  --cocoa-gold: #E8B86D;
-  --cocoa-cream: #F5E6D3;
-  --cocoa-light: #FAF2E8;
-  --cocoa-text: #F5E6D3;
-  --cocoa-muted: #A07850;
-  --shadow-soft: 0 4px 20px rgba(0,0,0,0.4);
-  --shadow-inset: inset 0 2px 8px rgba(0,0,0,0.5), inset 0 -1px 3px rgba(255,255,255,0.05);
-  --radius-lg: 20px;
-  --radius-xl: 32px;
-  --radius-round: 50%;
+  --bg: #FAF8F5;
+  --bg2: #F2EDE6;
+  --surface: #FFF9F4;
+  --oat: #EDE4D8;
+  --oat2: #DDD3C4;
+  --cream: #FAF8F5;
+  --red: #E8A598;
+  --red2: #D8897A;
+  --red3: #C0736A;
+  --warm: #C9A882;
+  --warm2: #A8845C;
+  --text: #5A4A3A;
+  --text2: #8A7A6A;
+  --text3: #B8A898;
+  --shadow-out: 6px 6px 16px rgba(160,140,120,0.25), -4px -4px 12px rgba(255,255,255,0.9);
+  --shadow-in: inset 4px 4px 10px rgba(160,140,120,0.2), inset -3px -3px 8px rgba(255,255,255,0.8);
+  --shadow-sm: 3px 3px 8px rgba(160,140,120,0.2), -2px -2px 6px rgba(255,255,255,0.9);
 }
 
 html, body {
   height: 100%;
-  background: var(--cocoa-bg);
+  background: var(--bg);
   font-family: 'Nunito', sans-serif;
-  color: var(--cocoa-text);
+  color: var(--text);
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
 #root {
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
 }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg2); }
+::-webkit-scrollbar-thumb { background: var(--oat2); border-radius: 3px; }
