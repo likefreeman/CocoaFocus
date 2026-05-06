@@ -123,53 +123,76 @@ function createFireSound(ctx: AudioContext, masterGain: GainNode): () => void {
 }
 
 function createCatPurr(ctx: AudioContext, masterGain: GainNode): () => void {
-  // Cat purring: ~25Hz base frequency with harmonics
-  const nodes: OscillatorNode[] = [];
-  const gains: GainNode[] = [];
-
-  const baseFreq = 26;
-  const harmonics = [1, 2, 3, 4, 6, 8];
-  const amps = [0.4, 0.25, 0.15, 0.1, 0.06, 0.04];
-
+  // Redesigned: gentle warm drone + soft noise bed — cozy, not scary
   const masterLocal = ctx.createGain();
-  masterLocal.gain.value = 0.35;
+  masterLocal.gain.value = 0.28;
+  masterLocal.connect(masterGain);
 
-  // Purr LFO — the "inhale/exhale" rhythm
-  const purrLfo = ctx.createOscillator();
-  purrLfo.type = 'sine';
-  purrLfo.frequency.value = 0.4; // ~24 breaths/min
-  const purrLfoGain = ctx.createGain();
-  purrLfoGain.gain.value = 0.2;
-  purrLfo.connect(purrLfoGain);
-  purrLfoGain.connect(masterLocal.gain);
-  purrLfo.start();
+  // Warm sine tones at comfortable mid-frequencies (like a cat's resonance through fur)
+  const drones: OscillatorNode[] = [];
+  const droneGains: GainNode[] = [];
+  const droneFreqs = [130, 195, 260]; // C3, G3, C4 — warm, cozy chord
+  const droneAmps  = [0.30, 0.18, 0.10];
 
   const lopass = ctx.createBiquadFilter();
   lopass.type = 'lowpass';
-  lopass.frequency.value = 400;
-  lopass.Q.value = 1.5;
+  lopass.frequency.value = 320;
+  lopass.Q.value = 0.5;
+  lopass.connect(masterLocal);
 
-  harmonics.forEach((h, i) => {
+  droneFreqs.forEach((freq, i) => {
     const osc = ctx.createOscillator();
-    osc.type = 'sawtooth';
-    osc.frequency.value = baseFreq * h;
+    osc.type = 'sine';
+    osc.frequency.value = freq;
     const g = ctx.createGain();
-    g.gain.value = amps[i];
+    g.gain.value = droneAmps[i];
     osc.connect(g);
     g.connect(lopass);
     osc.start();
-    nodes.push(osc);
-    gains.push(g);
+    drones.push(osc);
+    droneGains.push(g);
   });
 
-  lopass.connect(masterLocal);
-  masterLocal.connect(masterGain);
+  // Soft noise texture (very quiet — adds warmth, not harshness)
+  const noiseSize = ctx.sampleRate * 2;
+  const noiseBuffer = ctx.createBuffer(1, noiseSize, ctx.sampleRate);
+  const nd = noiseBuffer.getChannelData(0);
+  let nb0 = 0, nb1 = 0, nb2 = 0;
+  for (let i = 0; i < noiseSize; i++) {
+    const w = Math.random() * 2 - 1;
+    nb0 = 0.99 * nb0 + w * 0.02; nb1 = 0.97 * nb1 + w * 0.04; nb2 = 0.90 * nb2 + w * 0.06;
+    nd[i] = (nb0 + nb1 + nb2) * 0.18;
+  }
+  const noiseSrc = ctx.createBufferSource();
+  noiseSrc.buffer = noiseBuffer;
+  noiseSrc.loop = true;
+  const noiseLP = ctx.createBiquadFilter();
+  noiseLP.type = 'lowpass';
+  noiseLP.frequency.value = 180;
+  const noiseGain = ctx.createGain();
+  noiseGain.gain.value = 0.12;
+  noiseSrc.connect(noiseLP);
+  noiseLP.connect(noiseGain);
+  noiseGain.connect(masterLocal);
+  noiseSrc.start();
+
+  // Slow, very smooth LFO — gentle "breathing" amplitude swell (~0.25 Hz)
+  const breathLfo = ctx.createOscillator();
+  breathLfo.type = 'sine';
+  breathLfo.frequency.value = 0.25;
+  const breathGain = ctx.createGain();
+  breathGain.gain.value = 0.07; // subtle swell, not dramatic
+  breathLfo.connect(breathGain);
+  breathGain.connect(masterLocal.gain);
+  breathLfo.start();
 
   return () => {
-    try { purrLfo.stop(); } catch {}
-    nodes.forEach(n => { try { n.stop(); n.disconnect(); } catch {} });
-    gains.forEach(g => { try { g.disconnect(); } catch {} });
-    try { lopass.disconnect(); masterLocal.disconnect(); } catch {}
+    try { breathLfo.stop(); } catch {}
+    try { noiseSrc.stop(); } catch {}
+    drones.forEach(d => { try { d.stop(); d.disconnect(); } catch {} });
+    droneGains.forEach(g => { try { g.disconnect(); } catch {} });
+    try { lopass.disconnect(); noiseLP.disconnect(); noiseGain.disconnect(); } catch {}
+    try { masterLocal.disconnect(); } catch {}
   };
 }
 
