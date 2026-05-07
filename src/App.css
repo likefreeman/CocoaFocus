@@ -140,6 +140,11 @@
 }
 
 /* ─── Mode bar ────────────────────────────────────────────── */
+.mode-bar-wrap {
+  position: relative;
+  width: 100%;
+}
+
 .mode-bar {
   display: flex;
   align-items: center;
@@ -213,7 +218,11 @@
 
 /* Settings panel */
 .settings-panel {
-  width: 100%;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 50;
   background: rgba(255,255,255,0.75);
   border-radius: 24px;
   padding: 20px 20px 16px;
@@ -542,7 +551,7 @@
   gap: 6px;
   padding: 14px 6px 12px;
   border-radius: 18px;
-  border: none;
+  border: 1.5px solid transparent;
   background: rgba(255,255,255,0.6);
   cursor: pointer;
   font-family: 'Nunito', sans-serif;

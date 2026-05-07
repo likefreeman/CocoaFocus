@@ -114,6 +114,7 @@ export default function App() {
     const tid = ++toastCounter
     setToasts(prev => [...prev, { id: tid, mode: finishedMode }])
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== tid)), 5000)
+    setTimeLeft(customMinutes[finishedMode] * 60)
     if (finishedMode === 'focus') { setSessions(s => s + 1); dropFruit() }
     setCompleted(false)
   }, [completed])
@@ -264,68 +265,70 @@ export default function App() {
       </header>
 
       <main className="main">
-        {/* Mode selector */}
-        <div className="mode-bar">
-          {(['focus', 'short', 'long'] as Mode[]).map(m => (
-            <button
-              key={m}
-              className={`mode-btn ${mode === m ? 'active' : ''} ${modePressed === m ? 'pressed' : ''}`}
-              onClick={() => handleModeChange(m)}
-            >
-              {MODE_LABELS[m]}
-            </button>
-          ))}
-          {/* Settings gear */}
-          <button
-            className={`settings-btn ${showSettings ? 'open' : ''}`}
-            onClick={e => { e.stopPropagation(); setShowSettings(s => !s) }}
-            title="自定义时长"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
-              <circle cx="12" cy="12" r="3"/>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-            </svg>
-          </button>
-        </div>
-
-        {/* Settings panel */}
-        {showSettings && (
-          <div className="settings-panel" onClick={e => e.stopPropagation()}>
-            <div className="settings-title">自定义时长（分钟）</div>
+        {/* Mode selector + settings panel wrapper */}
+        <div className="mode-bar-wrap">
+          <div className="mode-bar">
             {(['focus', 'short', 'long'] as Mode[]).map(m => (
-              <div key={m} className="settings-row">
-                <span className="settings-label">{MODE_LABELS[m]}</span>
-                <div className="settings-stepper">
-                  <button
-                    className="stepper-btn"
-                    onClick={() => handleMinuteChange(m, -1)}
-                    disabled={customMinutes[m] <= MODE_RANGE[m][0]}
-                  >−</button>
-                  <input
-                    type="number"
-                    className="stepper-input"
-                    value={customMinutes[m]}
-                    min={MODE_RANGE[m][0]}
-                    max={MODE_RANGE[m][1]}
-                    onChange={e => handleMinuteInput(m, e.target.value)}
-                  />
-                  <button
-                    className="stepper-btn"
-                    onClick={() => handleMinuteChange(m, 1)}
-                    disabled={customMinutes[m] >= MODE_RANGE[m][1]}
-                  >＋</button>
-                </div>
-              </div>
+              <button
+                key={m}
+                className={`mode-btn ${mode === m ? 'active' : ''} ${modePressed === m ? 'pressed' : ''}`}
+                onClick={() => handleModeChange(m)}
+              >
+                {MODE_LABELS[m]}
+              </button>
             ))}
+            {/* Settings gear */}
             <button
-              className="settings-reset-btn"
-              onClick={() => {
-                setCustomMinutes({ ...DEFAULT_MINUTES })
-                if (!isRunning) setTimeLeft(DEFAULT_MINUTES[mode] * 60)
-              }}
-            >恢复默认</button>
+              className={`settings-btn ${showSettings ? 'open' : ''}`}
+              onClick={e => { e.stopPropagation(); setShowSettings(s => !s) }}
+              title="自定义时长"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+            </button>
           </div>
-        )}
+
+          {/* Settings panel */}
+          {showSettings && (
+            <div className="settings-panel" onClick={e => e.stopPropagation()}>
+              <div className="settings-title">自定义时长（分钟）</div>
+              {(['focus', 'short', 'long'] as Mode[]).map(m => (
+                <div key={m} className="settings-row">
+                  <span className="settings-label">{MODE_LABELS[m]}</span>
+                  <div className="settings-stepper">
+                    <button
+                      className="stepper-btn"
+                      onClick={() => handleMinuteChange(m, -1)}
+                      disabled={customMinutes[m] <= MODE_RANGE[m][0]}
+                    >−</button>
+                    <input
+                      type="number"
+                      className="stepper-input"
+                      value={customMinutes[m]}
+                      min={MODE_RANGE[m][0]}
+                      max={MODE_RANGE[m][1]}
+                      onChange={e => handleMinuteInput(m, e.target.value)}
+                    />
+                    <button
+                      className="stepper-btn"
+                      onClick={() => handleMinuteChange(m, 1)}
+                      disabled={customMinutes[m] >= MODE_RANGE[m][1]}
+                    >＋</button>
+                  </div>
+                </div>
+              ))}
+              <button
+                className="settings-reset-btn"
+                onClick={() => {
+                  setCustomMinutes({ ...DEFAULT_MINUTES })
+                  if (!isRunning) setTimeLeft(DEFAULT_MINUTES[mode] * 60)
+                }}
+              >恢复默认</button>
+            </div>
+          )}
+        </div>
 
         {/* Timer card */}
         <div className="timer-card">
