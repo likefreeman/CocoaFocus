@@ -30,7 +30,9 @@ jobs:
           python-version: '3.12'
 
       - name: Install openhands-resolver
-        run: pip install openhands-resolver
+        run: |
+          pip install "openhands-ai==0.9.4"
+          pip install openhands-resolver
 
       - name: Resolve issue
         env:
