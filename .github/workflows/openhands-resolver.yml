@@ -18,17 +18,28 @@ permissions:
   issues: write
 
 jobs:
-  call-openhands-resolver:
-    uses: OpenHands/OpenHands/.github/workflows/openhands-resolver.yml@main
-    with:
-      macro: ${{ vars.OPENHANDS_MACRO || '@openhands-agent' }}
-      max_iterations: ${{ fromJson(vars.OPENHANDS_MAX_ITER || 50) }}
-      base_container_image: ${{ vars.OPENHANDS_BASE_CONTAINER_IMAGE || '' }}
-      LLM_MODEL: ${{ vars.LLM_MODEL || 'openai/deepseek-chat' }}
-      target_branch: ${{ vars.TARGET_BRANCH || 'main' }}
-      runner: ${{ vars.TARGET_RUNNER }}
-    secrets:
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-      PAT_USERNAME: ${{ secrets.PAT_USERNAME }}
-      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-      LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
+  openhands-resolver:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install openhands-resolver
+        run: pip install openhands-resolver
+
+      - name: Resolve issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_USERNAME: ${{ secrets.PAT_USERNAME }}
+          LLM_MODEL: ${{ vars.LLM_MODEL || 'openai/deepseek-chat' }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
+        run: |
+          python -m openhands_resolver.resolve_issue \
+            --repo ${{ github.repository }} \
+            --issue-number ${{ github.event.issue.number }}
