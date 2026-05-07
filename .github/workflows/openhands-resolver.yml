@@ -3,14 +3,14 @@ name: Resolve Issue with OpenHands
 on:
   issues:
     types: [labeled]
-  pull_request:
-    types: [labeled]
   issue_comment:
     types: [created]
-  pull_request_review_comment:
-    types: [created]
-  pull_request_review:
-    types: [submitted]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue number to resolve"
+        required: true
+        type: number
 
 permissions:
   contents: write
@@ -18,17 +18,63 @@ permissions:
   issues: write
 
 jobs:
-  call-openhands-resolver:
-    uses: All-Hands-AI/OpenHands/.github/workflows/openhands-resolver.yml@main
-    with:
-      macro: ${{ vars.OPENHANDS_MACRO || '@openhands-agent' }}
-      max_iterations: ${{ fromJSON(vars.OPENHANDS_MAX_ITER || '30') }}
-      base_container_image: ${{ vars.OPENHANDS_BASE_CONTAINER_IMAGE || '' }}
+  openhands-resolver:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issues' && github.event.label.name == 'fix-me') ||
+      (
+        github.event_name == 'issue_comment' &&
+        contains(github.event.comment.body, '@openhands-agent') &&
+        (
+          github.event.comment.author_association == 'OWNER' ||
+          github.event.comment.author_association == 'MEMBER' ||
+          github.event.comment.author_association == 'COLLABORATOR'
+        )
+      )
+
+    runs-on: ubuntu-latest
+
+    env:
       LLM_MODEL: ${{ vars.LLM_MODEL || 'openai/deepseek-chat' }}
-      target_branch: ${{ vars.TARGET_BRANCH || 'main' }}
-      runner: ${{ vars.TARGET_RUNNER || 'ubuntu-latest' }}
-    secrets:
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-      PAT_USERNAME: ${{ secrets.PAT_USERNAME }}
       LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
       LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
+      LLM_NUM_RETRIES: 13
+      LLM_RETRY_MIN_WAIT: 60
+      LLM_RETRY_MAX_WAIT: 300
+      LLM_TIMEOUT: 300
+      GITHUB_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
+      GITHUB_USERNAME: ${{ secrets.PAT_USERNAME || 'openhands-agent' }}
+      GIT_USERNAME: ${{ secrets.PAT_USERNAME || 'openhands-agent' }}
+      SANDBOX_ENV_GITHUB_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install OpenHands
+        run: |
+          python -m pip install --upgrade pip
+          pip install openhands-ai
+
+      - name: Check required secrets
+        run: |
+          if [ -z "$LLM_API_KEY" ]; then
+            echo "LLM_API_KEY is required"
+            exit 1
+          fi
+
+      - name: Resolve issue
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number }}
+        run: |
+          cd /tmp
+          python -m openhands.resolver.resolve_issue \
+            --selected-repo "${{ github.repository }}" \
+            --issue-number "$ISSUE_NUMBER" \
+            --issue-type issue \
+            --max-iterations "${{ vars.OPENHANDS_MAX_ITER || 30 }}"
