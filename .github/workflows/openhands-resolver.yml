@@ -19,10 +19,10 @@ permissions:
 
 jobs:
   call-openhands-resolver:
-    uses: OpenHands/OpenHands/.github/workflows/openhands-resolver.yml@main
+    uses: All-Hands-AI/OpenHands/.github/workflows/openhands-resolver.yml@main
     with:
       macro: ${{ vars.OPENHANDS_MACRO || '@openhands-agent' }}
-      max_iterations: ${{ fromJson(vars.OPENHANDS_MAX_ITER || 30) }}
+      max_iterations: ${{ fromJSON(vars.OPENHANDS_MAX_ITER || '30') }}
       base_container_image: ${{ vars.OPENHANDS_BASE_CONTAINER_IMAGE || '' }}
       LLM_MODEL: ${{ vars.LLM_MODEL || 'openai/deepseek-chat' }}
       target_branch: ${{ vars.TARGET_BRANCH || 'main' }}
