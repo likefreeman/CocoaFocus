@@ -22,11 +22,11 @@ jobs:
     uses: OpenHands/OpenHands/.github/workflows/openhands-resolver.yml@main
     with:
       macro: ${{ vars.OPENHANDS_MACRO || '@openhands-agent' }}
-      max_iterations: ${{ fromJson(vars.OPENHANDS_MAX_ITER || '50') }}
+      max_iterations: ${{ fromJson(vars.OPENHANDS_MAX_ITER || 50) }}
       base_container_image: ${{ vars.OPENHANDS_BASE_CONTAINER_IMAGE || '' }}
       LLM_MODEL: ${{ vars.LLM_MODEL || 'openai/deepseek-chat' }}
       target_branch: ${{ vars.TARGET_BRANCH || 'main' }}
-      runner: ${{ vars.TARGET_RUNNER || 'ubuntu-latest' }}
+      runner: ${{ vars.TARGET_RUNNER }}
     secrets:
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
       PAT_USERNAME: ${{ secrets.PAT_USERNAME }}
