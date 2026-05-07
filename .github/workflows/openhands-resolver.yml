@@ -59,7 +59,7 @@ jobs:
       - name: Install OpenHands
         run: |
           python -m pip install --upgrade pip
-          pip install openhands-ai
+          pip install "git+https://github.com/OpenHands/OpenHands.git"
 
       - name: Check required secrets
         run: |
