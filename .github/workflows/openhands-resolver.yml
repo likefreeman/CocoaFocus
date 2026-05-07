@@ -42,24 +42,39 @@ jobs:
       LLM_RETRY_MIN_WAIT: 60
       LLM_RETRY_MAX_WAIT: 300
       LLM_TIMEOUT: 300
+
       GITHUB_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
-      GITHUB_USERNAME: ${{ secrets.PAT_USERNAME || 'openhands-agent' }}
-      GIT_USERNAME: ${{ secrets.PAT_USERNAME || 'openhands-agent' }}
+      GITHUB_USERNAME: ${{ secrets.PAT_USERNAME || github.repository_owner }}
+      GIT_USERNAME: ${{ secrets.PAT_USERNAME || github.repository_owner }}
       SANDBOX_ENV_GITHUB_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
 
     steps:
-      - name: Checkout repository
+      - name: Checkout target repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN || github.token }}
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install OpenHands
+      - name: Clone OpenHands source
+        run: |
+          git clone --depth 1 https://github.com/OpenHands/OpenHands.git /tmp/OpenHands
+          ls -la /tmp/OpenHands/openhands/resolver
+
+      - name: Install OpenHands from source
         run: |
           python -m pip install --upgrade pip
-          pip install "git+https://github.com/OpenHands/OpenHands.git"
+          cd /tmp/OpenHands
+          pip install -e .
+
+      - name: Check resolver module
+        run: |
+          cd /tmp/OpenHands
+          PYTHONPATH=/tmp/OpenHands python -c "import openhands.resolver.resolve_issue; print('resolver module ok')"
 
       - name: Check required secrets
         run: |
@@ -72,8 +87,8 @@ jobs:
         env:
           ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number }}
         run: |
-          cd /tmp
-          python -m openhands.resolver.resolve_issue \
+          cd /tmp/OpenHands
+          PYTHONPATH=/tmp/OpenHands python -m openhands.resolver.resolve_issue \
             --selected-repo "${{ github.repository }}" \
             --issue-number "$ISSUE_NUMBER" \
             --issue-type issue \
