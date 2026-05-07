@@ -32,22 +32,14 @@ jobs:
     runs-on: ${{ vars.TARGET_RUNNER || 'ubuntu-latest' }}
 
     env:
-      # GitHub token used by the resolver for repository operations.
       GITHUB_TOKEN: ${{ github.token }}
 
-      # LLM settings.
-      # Put LLM_API_KEY in GitHub Actions Secrets.
       LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-
-      # Recommended for your DeepSeek setup.
-      # You may also set these as repository Variables.
       LLM_MODEL: ${{ vars.LLM_MODEL || 'openai/deepseek-chat' }}
       LLM_BASE_URL: ${{ vars.LLM_BASE_URL || 'https://api.deepseek.com' }}
 
-      # Limit cost / runaway loops.
       OPENHANDS_MAX_ITER: ${{ vars.OPENHANDS_MAX_ITER || '30' }}
 
-      # Optional: use PAT if provided; otherwise resolver can use GITHUB_TOKEN.
       PAT_USERNAME: ${{ vars.PAT_USERNAME || github.actor }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
 
