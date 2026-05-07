@@ -26,3 +26,7 @@ dist-ssr/
 
 # Agent temp files
 .agents_tmp/
+
+# Session artifacts
+bash_events/
+conversations/
